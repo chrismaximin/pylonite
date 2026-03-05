@@ -143,7 +143,7 @@ Pylonite is designed to be used by AI agents as a lightweight task tracker. Key 
 
 ```sh
 bundle install
-ruby -Ilib -Itest -e 'Dir["test/test_*.rb"].each { |f| require_relative f }'
+rake test
 ```
 
 ## License
