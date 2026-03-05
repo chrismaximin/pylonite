@@ -544,4 +544,50 @@ class TestDatabase < Minitest::Test
     @db.close
     @db = nil # prevent double close in teardown
   end
+
+  # --- Migrations ---
+
+  def test_new_db_has_current_schema_version
+    assert_equal Pylonite::Database::MIGRATIONS.length, @db.schema_version
+  end
+
+  def test_reopening_db_preserves_version
+    version_before = @db.schema_version
+    @db.close
+    @db = Pylonite::Database.new(@project_path)
+    assert_equal version_before, @db.schema_version
+  end
+
+  def test_reopening_db_preserves_data
+    @db.add_task("Persistent task", author: "alice")
+    @db.close
+    @db = Pylonite::Database.new(@project_path)
+    task = @db.get_task(1)
+    assert_equal "Persistent task", task["title"]
+  end
+
+  def test_migrate_skips_already_applied
+    version_before = @db.schema_version
+    @db.send(:migrate!)
+    assert_equal version_before, @db.schema_version
+  end
+
+  def test_migrate_from_zero_applies_all
+    # Simulate a fresh DB by resetting user_version to 0
+    @db.close
+    raw_db = SQLite3::Database.new(@db.db_path)
+    raw_db.execute("PRAGMA user_version = 0")
+    # Drop all tables to simulate fresh state
+    raw_db.execute("DROP TABLE IF EXISTS task_dependencies")
+    raw_db.execute("DROP TABLE IF EXISTS task_history")
+    raw_db.execute("DROP TABLE IF EXISTS comments")
+    raw_db.execute("DROP TABLE IF EXISTS tasks")
+    raw_db.close
+
+    @db = Pylonite::Database.new(@project_path)
+    assert_equal Pylonite::Database::MIGRATIONS.length, @db.schema_version
+    # Verify tables work
+    id = @db.add_task("After migration", author: "alice")
+    assert_equal "After migration", @db.get_task(id)["title"]
+  end
 end

@@ -235,6 +235,10 @@ module Pylonite
       @db.close
     end
 
+    def schema_version
+      @db.get_first_value("PRAGMA user_version")
+    end
+
     private
 
     def get_task_raw(task_id)
@@ -253,9 +257,10 @@ module Pylonite
       )
     end
 
-    def migrate!
-      @db.execute_batch(<<~SQL)
-        CREATE TABLE IF NOT EXISTS tasks (
+    MIGRATIONS = [
+      # Version 1: Initial schema
+      <<~SQL
+        CREATE TABLE tasks (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           title TEXT NOT NULL,
           description TEXT,
@@ -266,7 +271,7 @@ module Pylonite
           updated_at TEXT NOT NULL
         );
 
-        CREATE TABLE IF NOT EXISTS comments (
+        CREATE TABLE comments (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           task_id INTEGER NOT NULL,
           author TEXT NOT NULL,
@@ -275,7 +280,7 @@ module Pylonite
           FOREIGN KEY (task_id) REFERENCES tasks(id)
         );
 
-        CREATE TABLE IF NOT EXISTS task_history (
+        CREATE TABLE task_history (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           task_id INTEGER NOT NULL,
           actor TEXT NOT NULL,
@@ -285,7 +290,7 @@ module Pylonite
           FOREIGN KEY (task_id) REFERENCES tasks(id)
         );
 
-        CREATE TABLE IF NOT EXISTS task_dependencies (
+        CREATE TABLE task_dependencies (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           task_id INTEGER NOT NULL,
           depends_on_id INTEGER NOT NULL,
@@ -295,12 +300,30 @@ module Pylonite
           UNIQUE(task_id, depends_on_id, dependency_type)
         );
 
-        CREATE INDEX IF NOT EXISTS idx_tasks_board ON tasks(board);
-        CREATE INDEX IF NOT EXISTS idx_comments_task_id ON comments(task_id);
-        CREATE INDEX IF NOT EXISTS idx_task_history_task_id ON task_history(task_id);
-        CREATE INDEX IF NOT EXISTS idx_task_dependencies_task_id ON task_dependencies(task_id);
-        CREATE INDEX IF NOT EXISTS idx_task_dependencies_depends_on ON task_dependencies(depends_on_id);
+        CREATE INDEX idx_tasks_board ON tasks(board);
+        CREATE INDEX idx_comments_task_id ON comments(task_id);
+        CREATE INDEX idx_task_history_task_id ON task_history(task_id);
+        CREATE INDEX idx_task_dependencies_task_id ON task_dependencies(task_id);
+        CREATE INDEX idx_task_dependencies_depends_on ON task_dependencies(depends_on_id);
       SQL
+      # To add a new migration:
+      # 1. Append a new SQL string to this array
+      # 2. It will run automatically on databases that haven't applied it yet
+      # 3. Never modify existing migrations -- always add new ones
+    ].freeze
+
+    def migrate!
+      current = schema_version
+
+      MIGRATIONS.each_with_index do |sql, index|
+        version = index + 1
+        next if version <= current
+
+        @db.transaction do
+          @db.execute_batch(sql)
+          @db.execute("PRAGMA user_version = #{version}")
+        end
+      end
     end
   end
 end
