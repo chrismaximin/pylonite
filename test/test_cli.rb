@@ -358,6 +358,35 @@ class TestCLI < Minitest::Test
     assert_match(/Usage/, stderr)
   end
 
+  # --- log ---
+
+  def test_log
+    run_cli("add", "Task A")
+    run_cli("add", "Task B")
+    run_cli("move", "1", "in_progress")
+    stdout, _ = run_cli("log")
+    assert_match(/Task A/, stdout)
+    assert_match(/Task B/, stdout)
+    assert_match(/created/, stdout)
+    assert_match(/moved/, stdout)
+  end
+
+  def test_log_empty
+    stdout, _ = run_cli("log")
+    assert_match(/No activity/, stdout)
+  end
+
+  def test_log_most_recent_first
+    run_cli("add", "First")
+    run_cli("add", "Second")
+    stdout, _ = run_cli("log")
+    second_pos = stdout.index("Second")
+    first_pos = stdout.index("First")
+    refute_nil second_pos
+    refute_nil first_pos
+    assert second_pos < first_pos, "Expected most recent entry first"
+  end
+
   # --- internal appropriate ---
 
   def test_internal_appropriate

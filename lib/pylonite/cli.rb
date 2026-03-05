@@ -27,6 +27,7 @@ module Pylonite
       when "unblock" then cmd_unblock(args)
       when "subtask" then cmd_subtask(args)
       when "edit" then cmd_edit(args)
+      when "log" then cmd_log(args)
       when "internal" then cmd_internal(args)
       when "tui" then Pylonite::TUI.run
       when "help", "--help", "-h", nil then Pylonite::Help.display
@@ -246,6 +247,44 @@ module Pylonite
       puts "Updated task #{BOLD}##{id}#{RESET}"
     end
 
+    def self.cmd_log(args)
+      db = Database.new
+      entries = db.activity_log
+
+      if entries.empty?
+        puts "No activity yet."
+        return
+      end
+
+      output = entries.map do |e|
+        "#{DIM}#{e["created_at"]}#{RESET} #{e["actor"]} #{format_action(e["action"])} #{BOLD}##{e["task_id"]}#{RESET} #{e["title"]}\n    #{DIM}#{e["detail"]}#{RESET}"
+      end.join("\n\n") + "\n"
+
+      if $stdout.tty?
+        pager = ENV["PAGER"] || "less -R"
+        IO.popen(pager, "w") { |io| io.write(output) }
+      else
+        $stdout.write(output)
+      end
+    rescue Errno::EPIPE
+      # user quit pager early
+    end
+
+    def self.format_action(action)
+      case action
+      when "created" then "created"
+      when "moved" then "moved"
+      when "assigned" then "assigned"
+      when "commented" then "commented on"
+      when "updated" then "updated"
+      when "blocker_added" then "added blocker to"
+      when "blocker_removed" then "removed blocker from"
+      when "subtask_added" then "added subtask to"
+      when "subtask_created" then "created subtask"
+      else action.tr("_", " ")
+      end
+    end
+
     def self.cmd_internal(args)
       subcommand = args.shift
       case subcommand
@@ -278,9 +317,9 @@ module Pylonite
       exit(1)
     end
 
-    private_class_method :extract_option, :colorize_board, :error,
+    private_class_method :extract_option, :colorize_board, :error, :format_action,
       :cmd_add, :cmd_show, :cmd_list, :cmd_move, :cmd_comment,
       :cmd_search, :cmd_archive, :cmd_assign, :cmd_block, :cmd_unblock,
-      :cmd_subtask, :cmd_edit, :cmd_internal
+      :cmd_subtask, :cmd_edit, :cmd_log, :cmd_internal
   end
 end

@@ -239,6 +239,15 @@ module Pylonite
       @db.execute("SELECT * FROM task_history WHERE task_id = ? ORDER BY created_at ASC", [task_id])
     end
 
+    def activity_log
+      @db.execute(<<~SQL)
+        SELECT h.created_at, h.actor, h.action, h.detail, h.task_id, t.title
+        FROM task_history h
+        JOIN tasks t ON t.id = h.task_id
+        ORDER BY h.created_at DESC, h.id DESC
+      SQL
+    end
+
     def close
       @db.close
     end

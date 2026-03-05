@@ -90,6 +90,15 @@ module Pylonite
             Example:
               pylonite unblock 3 1
 
+        \e[1mACTIVITY\e[0m
+
+          pylonite log
+            Show full activity log (most recent first) in a pager.
+            All task events: creation, moves, comments, assignments, etc.
+            Uses $PAGER or falls back to `less -R`.
+            Example:
+              pylonite log
+
         \e[1mOTHER\e[0m
 
           pylonite tui

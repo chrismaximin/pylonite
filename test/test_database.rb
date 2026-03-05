@@ -511,6 +511,52 @@ class TestDatabase < Minitest::Test
     assert_equal %w[created assigned moved commented moved], actions
   end
 
+  # --- Activity log ---
+
+  def test_activity_log_returns_all_events
+    id = @db.add_task("Task", author: "alice")
+    @db.move_task(id, "in_progress")
+    @db.add_comment(id, "comment")
+    log = @db.activity_log
+    assert_equal 3, log.length
+  end
+
+  def test_activity_log_most_recent_first
+    @db.add_task("First", author: "alice")
+    @db.add_task("Second", author: "alice")
+    log = @db.activity_log
+    assert_equal "Second", log[0]["title"]
+    assert_equal "First", log[1]["title"]
+  end
+
+  def test_activity_log_includes_task_title
+    @db.add_task("My task", author: "alice")
+    log = @db.activity_log
+    assert_equal "My task", log[0]["title"]
+  end
+
+  def test_activity_log_includes_actor
+    @db.add_task("Task", author: "alice")
+    log = @db.activity_log
+    assert_equal "alice", log[0]["actor"]
+  end
+
+  def test_activity_log_empty
+    log = @db.activity_log
+    assert_empty log
+  end
+
+  def test_activity_log_spans_multiple_tasks
+    id1 = @db.add_task("Task A", author: "alice")
+    id2 = @db.add_task("Task B", author: "bob")
+    @db.move_task(id1, "done")
+    log = @db.activity_log
+    assert_equal 3, log.length
+    task_ids = log.map { |e| e["task_id"] }
+    assert_includes task_ids, id1
+    assert_includes task_ids, id2
+  end
+
   # --- Appropriate ---
 
   def test_appropriate_moves_db_file
