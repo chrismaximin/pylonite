@@ -285,4 +285,107 @@ class TestTUI < Minitest::Test
     Pylonite::TUI.handle_detail_input(state, "k")
     assert_equal 0, state[:detail_scroll]
   end
+
+  # --- Move functionality ---
+
+  def test_board_m_enters_move_mode
+    @db.add_task("Task", author: "a")
+    state = { view: :board, col_index: 0, row_index: 0, show_archived: false, db: @db, moving: false, move_task_id: nil }
+    Pylonite::TUI.handle_board_input(state, "m")
+    assert state[:moving]
+    assert_equal 1, state[:move_task_id]
+  end
+
+  def test_board_m_on_empty_does_nothing
+    state = { view: :board, col_index: 0, row_index: 0, show_archived: false, db: @db, moving: false, move_task_id: nil }
+    Pylonite::TUI.handle_board_input(state, "m")
+    refute state[:moving]
+    assert_nil state[:move_task_id]
+  end
+
+  def test_detail_m_enters_move_mode
+    state = { view: :detail, detail_scroll: 0, detail_task_id: 42, moving: false, move_task_id: nil }
+    Pylonite::TUI.handle_detail_input(state, "m")
+    assert state[:moving]
+    assert_equal 42, state[:move_task_id]
+  end
+
+  def test_move_input_1_moves_to_backlog
+    id = @db.add_task("Task", author: "a", board: "todo")
+    state = { db: @db, moving: true, move_task_id: id }
+    Pylonite::TUI.handle_move_input(state, "1")
+    refute state[:moving]
+    assert_equal "backlog", @db.get_task(id)["board"]
+  end
+
+  def test_move_input_2_moves_to_todo
+    id = @db.add_task("Task", author: "a")
+    state = { db: @db, moving: true, move_task_id: id }
+    Pylonite::TUI.handle_move_input(state, "2")
+    assert_equal "todo", @db.get_task(id)["board"]
+  end
+
+  def test_move_input_3_moves_to_in_progress
+    id = @db.add_task("Task", author: "a")
+    state = { db: @db, moving: true, move_task_id: id }
+    Pylonite::TUI.handle_move_input(state, "3")
+    assert_equal "in_progress", @db.get_task(id)["board"]
+  end
+
+  def test_move_input_4_moves_to_done
+    id = @db.add_task("Task", author: "a")
+    state = { db: @db, moving: true, move_task_id: id }
+    Pylonite::TUI.handle_move_input(state, "4")
+    assert_equal "done", @db.get_task(id)["board"]
+  end
+
+  def test_move_input_5_moves_to_archived
+    id = @db.add_task("Task", author: "a")
+    state = { db: @db, moving: true, move_task_id: id }
+    Pylonite::TUI.handle_move_input(state, "5")
+    assert_equal "archived", @db.get_task(id)["board"]
+  end
+
+  def test_move_input_cancel
+    id = @db.add_task("Task", author: "a")
+    state = { db: @db, moving: true, move_task_id: id }
+    Pylonite::TUI.handle_move_input(state, "x")
+    refute state[:moving]
+    assert_nil state[:move_task_id]
+    assert_equal "backlog", @db.get_task(id)["board"]
+  end
+
+  # --- Help overlay ---
+
+  def test_board_question_mark_shows_help
+    state = { view: :board, col_index: 0, row_index: 0, show_archived: false, db: @db, show_help: false }
+    Pylonite::TUI.handle_board_input(state, "?")
+    assert state[:show_help]
+  end
+
+  def test_detail_question_mark_shows_help
+    state = { view: :detail, detail_scroll: 0, show_help: false }
+    Pylonite::TUI.handle_detail_input(state, "?")
+    assert state[:show_help]
+  end
+
+  def test_help_overlay_content
+    content = Pylonite::TUI.render_help_overlay(80, 24)
+    stripped = content.gsub(/\e\[[0-9;]*[A-Za-z]/, "")
+    assert_match(/Keyboard Shortcuts/, stripped)
+    assert_match(/Board View/, stripped)
+    assert_match(/Detail View/, stripped)
+    assert_match(/Move Overlay/, stripped)
+  end
+
+  def test_move_overlay_content
+    id = @db.add_task("My task", author: "a")
+    state = { db: @db, move_task_id: id }
+    content = Pylonite::TUI.render_move_overlay(state, 80, 24)
+    stripped = content.gsub(/\e\[[0-9;]*[A-Za-z]/, "")
+    assert_match(/Move task ##{id}/, stripped)
+    assert_match(/Backlog/, stripped)
+    assert_match(/In Progress/, stripped)
+    assert_match(/1-5/, stripped)
+  end
 end

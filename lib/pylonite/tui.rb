@@ -24,7 +24,10 @@ module Pylonite
         row_index: 0,
         show_archived: false,
         detail_task_id: nil,
-        detail_scroll: 0
+        detail_scroll: 0,
+        show_help: false,
+        moving: false,
+        move_task_id: nil
       }
 
       setup_terminal
@@ -57,6 +60,15 @@ module Pylonite
     def self.handle_input(state)
       char = read_key
       return true unless char
+
+      if state[:show_help]
+        state[:show_help] = false
+        return true
+      end
+
+      if state[:moving]
+        return handle_move_input(state, char)
+      end
 
       case state[:view]
       when :board
@@ -124,6 +136,14 @@ module Pylonite
           state[:detail_scroll] = 0
           state[:view] = :detail
         end
+      when "m"
+        col_tasks = tasks_by_board[boards[state[:col_index]]] || []
+        if col_tasks[state[:row_index]]
+          state[:moving] = true
+          state[:move_task_id] = col_tasks[state[:row_index]]["id"]
+        end
+      when "?"
+        state[:show_help] = true
       end
 
       true
@@ -139,9 +159,34 @@ module Pylonite
         state[:detail_scroll] = [state[:detail_scroll] - 1, 0].max
       when :down, "j"
         state[:detail_scroll] += 1
+      when "m"
+        state[:moving] = true
+        state[:move_task_id] = state[:detail_task_id]
+      when "?"
+        state[:show_help] = true
       end
 
       true
+    end
+
+    def self.handle_move_input(state, key)
+      case key
+      when "1" then do_move(state, "backlog")
+      when "2" then do_move(state, "todo")
+      when "3" then do_move(state, "in_progress")
+      when "4" then do_move(state, "done")
+      when "5" then do_move(state, "archived")
+      else
+        state[:moving] = false
+        state[:move_task_id] = nil
+      end
+      true
+    end
+
+    def self.do_move(state, board)
+      state[:db].move_task(state[:move_task_id], board)
+      state[:moving] = false
+      state[:move_task_id] = nil
     end
 
     def self.visible_boards(state)
@@ -167,6 +212,12 @@ module Pylonite
         buf << render_board(state, cols, rows)
       when :detail
         buf << render_detail(state, cols, rows)
+      end
+
+      if state[:show_help]
+        buf << render_help_overlay(cols, rows)
+      elsif state[:moving]
+        buf << render_move_overlay(state, cols, rows)
       end
 
       print buf
@@ -242,7 +293,7 @@ module Pylonite
       end
 
       # Status bar
-      bar_text = " q:quit  hjkl/arrows:navigate  enter:detail  a:toggle archived"
+      bar_text = " q:quit  hjkl:navigate  enter:detail  m:move  a:archived  ?:help"
       archived_status = state[:show_archived] ? " [archived:on]" : ""
       bar_text += archived_status
       buf << "\e[#{rows};1H" # move to last row
@@ -275,11 +326,82 @@ module Pylonite
       remaining.times { buf << "\n" }
 
       # Status bar
-      bar_text = " b:back  q:quit  j/k:scroll"
+      bar_text = " b:back  q:quit  j/k:scroll  m:move  ?:help"
       buf << "\e[#{rows};1H"
       buf << "#{REVERSE}#{DIM}#{bar_text.ljust(cols)}#{RESET}"
 
       buf
+    end
+
+    def self.render_overlay(lines, cols, rows)
+      box_width = lines.map { |l| l.gsub(/\e\[[0-9;]*m/, "").length }.max + 4
+      box_width = [box_width, cols - 4].min
+      box_height = lines.length + 2
+      start_col = [(cols - box_width) / 2, 1].max
+      start_row = [(rows - box_height) / 2, 1].max
+
+      buf = +""
+      buf << "\e[#{start_row};#{start_col}H"
+      buf << "#{REVERSE}#{' ' * box_width}#{RESET}"
+      lines.each_with_index do |line, i|
+        buf << "\e[#{start_row + 1 + i};#{start_col}H"
+        stripped = line.gsub(/\e\[[0-9;]*m/, "")
+        padding = box_width - stripped.length - 4
+        buf << "#{REVERSE}  #{RESET} #{line}#{' ' * [padding, 0].max} #{REVERSE} #{RESET}"
+      end
+      buf << "\e[#{start_row + box_height - 1};#{start_col}H"
+      buf << "#{REVERSE}#{' ' * box_width}#{RESET}"
+      buf
+    end
+
+    def self.render_help_overlay(cols, rows)
+      lines = [
+        "#{BOLD}Keyboard Shortcuts#{RESET}",
+        "",
+        "#{BOLD}Board View#{RESET}",
+        "  h/l, left/right   Switch columns",
+        "  j/k, up/down      Move between tasks",
+        "  Enter             View task detail",
+        "  m                 Move selected task to another board",
+        "  a                 Toggle archived column",
+        "  q, Esc            Quit",
+        "",
+        "#{BOLD}Detail View#{RESET}",
+        "  j/k, up/down      Scroll",
+        "  m                 Move task to another board",
+        "  b, Esc            Back to board view",
+        "  q                 Quit",
+        "",
+        "#{BOLD}Move Overlay#{RESET}",
+        "  1                 Backlog",
+        "  2                 Todo",
+        "  3                 In Progress",
+        "  4                 Done",
+        "  5                 Archived",
+        "  Any other key     Cancel",
+        "",
+        "#{DIM}Press any key to close#{RESET}"
+      ]
+      render_overlay(lines, cols, rows)
+    end
+
+    def self.render_move_overlay(state, cols, rows)
+      task = state[:db].get_task(state[:move_task_id])
+      title = task ? truncate(task["title"], 30) : "?"
+      current = task ? task["board"] : "?"
+      lines = [
+        "#{BOLD}Move task ##{state[:move_task_id]}#{RESET} #{DIM}#{title}#{RESET}",
+        "#{DIM}Currently: #{board_label(current)}#{RESET}",
+        "",
+        "  #{BOARD_COLORS["backlog"]}1#{RESET}  Backlog",
+        "  #{BOARD_COLORS["todo"]}2#{RESET}  Todo",
+        "  #{BOARD_COLORS["in_progress"]}3#{RESET}  In Progress",
+        "  #{BOARD_COLORS["done"]}4#{RESET}  Done",
+        "  #{BOARD_COLORS["archived"]}5#{RESET}  Archived",
+        "",
+        "#{DIM}Press 1-5 to move, any other key to cancel#{RESET}"
+      ]
+      render_overlay(lines, cols, rows)
     end
 
     def self.build_detail_lines(task, cols)
