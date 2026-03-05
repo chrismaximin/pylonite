@@ -1,0 +1,84 @@
+#!/usr/bin/env ruby
+
+# Creates a demo database with realistic tasks and activity
+# for taking screenshots. Uses a fake project path so it
+# doesn't interfere with real projects.
+
+require_relative "../lib/pylonite"
+
+DEMO_PROJECT = File.realpath("/tmp/pylonite-demo-project")
+
+# Clean any previous demo
+old_path = Pylonite::Database.db_path_for(DEMO_PROJECT)
+File.delete(old_path) if File.exist?(old_path)
+
+db = Pylonite::Database.new(DEMO_PROJECT)
+
+# --- Backlog tasks ---
+t1 = db.add_task("Add WebSocket support for real-time updates", author: "alice", description: "Replace polling with WebSocket connections for live dashboard updates")
+t2 = db.add_task("Write API documentation for v2 endpoints", author: "bob")
+t3 = db.add_task("Investigate memory leak in worker process", author: "alice", description: "RSS grows to 2GB after ~24h in production")
+t4 = db.add_task("Add dark mode to settings page", author: "carol")
+
+# --- Todo tasks ---
+t5 = db.add_task("Migrate user sessions to Redis", author: "bob", board: "todo")
+db.assign_task(t5, "carol", actor: "bob")
+db.add_comment(t5, "Redis cluster is ready in staging", author: "dave")
+
+t6 = db.add_task("Add rate limiting to public API", author: "alice", board: "todo", description: "Max 100 req/min per API key")
+db.assign_task(t6, "bob", actor: "alice")
+
+t7 = db.add_task("Set up CI pipeline for mobile app", author: "carol", board: "todo")
+
+# --- In progress tasks ---
+t8 = db.add_task("Fix N+1 query in dashboard endpoint", author: "alice", board: "in_progress", description: "The /api/dashboard endpoint makes 200+ queries. Use eager loading.")
+db.assign_task(t8, "alice", actor: "alice")
+db.add_comment(t8, "Found the issue - missing includes on Project.all", author: "alice")
+db.add_comment(t8, "Down to 3 queries now, running benchmarks", author: "alice")
+
+t9 = db.add_task("Upgrade Rails to 8.0", author: "bob", board: "in_progress")
+db.assign_task(t9, "bob", actor: "bob")
+db.add_comment(t9, "Most gems are compatible, blocked on activerecord-postgis", author: "bob")
+
+t10 = db.add_task("Design new onboarding flow", author: "carol", board: "in_progress")
+db.assign_task(t10, "dave", actor: "carol")
+
+# --- Done tasks ---
+t11 = db.add_task("Add two-factor authentication", author: "alice", board: "done")
+db.assign_task(t11, "alice", actor: "alice")
+db.add_comment(t11, "TOTP and SMS both supported", author: "alice")
+db.add_comment(t11, "QA approved, shipping to prod", author: "carol")
+
+t12 = db.add_task("Fix timezone bug in scheduling", author: "dave", board: "done")
+db.assign_task(t12, "dave", actor: "dave")
+
+t13 = db.add_task("Compress static assets with Brotli", author: "bob", board: "done")
+db.assign_task(t13, "bob", actor: "bob")
+
+# --- Dependencies ---
+db.add_blocker(t1, t9, actor: "alice")    # WebSocket blocked by Rails upgrade
+db.add_blocker(t5, t6, actor: "bob")      # Redis migration blocked by rate limiting
+
+# --- Subtasks ---
+sub1 = db.add_subtask(t8, "Add eager loading to Project queries", author: "alice")
+db.move_task(sub1, "done", actor: "alice")
+sub2 = db.add_subtask(t8, "Add database indexes for dashboard", author: "alice")
+db.move_task(sub2, "in_progress", actor: "alice")
+sub3 = db.add_subtask(t8, "Write performance regression tests", author: "alice")
+
+# --- Archived ---
+t14 = db.add_task("Remove legacy XML export", author: "bob")
+db.move_task(t14, "done", actor: "bob")
+db.archive_task(t14, actor: "bob")
+
+db.close
+
+puts "Demo database created at: #{old_path}"
+puts ""
+puts "To use it:"
+puts "  cd #{DEMO_PROJECT}"
+puts "  mkdir -p #{DEMO_PROJECT} && cd #{DEMO_PROJECT}"
+puts ""
+puts "  ruby #{File.expand_path("../bin/pylonite", __dir__)} list"
+puts "  ruby #{File.expand_path("../bin/pylonite", __dir__)} log"
+puts "  ruby #{File.expand_path("../bin/pylonite", __dir__)} tui"

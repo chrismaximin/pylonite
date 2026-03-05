@@ -4,16 +4,30 @@ A SQLite-backed kanban board built for AI agents and humans. Manage tasks, track
 
 Each project directory gets its own database stored at `~/.pylonite/dbs/`. The current `$USER` is automatically recorded as author for all actions.
 
+### Board overview
+
+![Task list grouped by board](screenshots/list.png)
+
+### Interactive TUI
+
+![TUI board view with columns](screenshots/tui-boards.png)
+
+### Task detail with move overlay
+
+![Task detail view with move dialog](screenshots/tui-task-move.png)
+
+### Task detail
+
+![Task detail view showing description, blockers, and history](screenshots/tui-task.png)
+
+### Activity log
+
+![Chronological activity log with pager](screenshots/log.png)
+
 ## Install
 
 ```sh
 gem install pylonite
-```
-
-Or add to your Gemfile:
-
-```ruby
-gem "pylonite"
 ```
 
 Requires Ruby >= 3.1.
@@ -101,7 +115,11 @@ An interactive terminal UI showing all boards as columns. Navigate with:
 | `h` `j` `k` `l` / arrows | Navigate between columns and tasks |
 | `Enter` | View task detail |
 | `b` | Back to board view |
+| `m` | Move task to another board |
+| `c` | Add a comment |
+| `L` | View activity log |
 | `a` | Toggle archived column |
+| `?` | Show help overlay |
 | `q` | Quit |
 
 ### Other
