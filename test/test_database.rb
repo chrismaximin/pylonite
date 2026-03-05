@@ -518,7 +518,6 @@ class TestDatabase < Minitest::Test
     @db.close
 
     new_project = File.join(@tmpdir, "renamed_project")
-    track_test_db(new_project)
     new_db_path = Pylonite::Database.appropriate(new_project, old_path)
 
     assert File.exist?(new_db_path)

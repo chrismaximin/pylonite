@@ -5,7 +5,15 @@ require "digest"
 module Pylonite
   class Database
     BOARDS = %w[backlog todo in_progress done archived].freeze
-    DB_DIR = File.expand_path("~/.pylonite/dbs")
+    DEFAULT_DB_DIR = File.expand_path("~/.pylonite/dbs")
+
+    def self.db_dir
+      @db_dir || DEFAULT_DB_DIR
+    end
+
+    def self.db_dir=(dir)
+      @db_dir = dir
+    end
 
     attr_reader :db, :db_path
 
@@ -26,7 +34,7 @@ module Pylonite
     end
 
     def self.db_path_for(project_path)
-      File.join(DB_DIR, "#{db_name_for(project_path)}.sqlite3")
+      File.join(db_dir, "#{db_name_for(project_path)}.sqlite3")
     end
 
     def self.appropriate(new_path, old_db_path)
