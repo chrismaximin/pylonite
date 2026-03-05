@@ -33,6 +33,9 @@ module Pylonite
       raise "Database not found: #{old_db_path}" unless File.exist?(old_db_path)
 
       new_db_path = db_path_for(new_path)
+      if File.expand_path(old_db_path) == File.expand_path(new_db_path)
+        return new_db_path
+      end
       FileUtils.mkdir_p(File.dirname(new_db_path))
       FileUtils.mv(old_db_path, new_db_path)
       new_db_path
