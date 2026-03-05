@@ -3,7 +3,7 @@ require_relative "lib/pylonite/version"
 Gem::Specification.new do |spec|
   spec.name          = "pylonite"
   spec.version       = Pylonite::VERSION
-  spec.authors       = ["pylonite contributors"]
+  spec.authors       = ["Chris Maximin"]
   spec.summary       = "SQLite-backed kanban board for agents and humans"
   spec.description   = "A simple, local kanban board backed by SQLite. Designed for AI agents and humans to manage tasks, track progress, and collaborate via CLI and TUI."
   spec.homepage      = "https://github.com/chrismaximin/pylonite"
