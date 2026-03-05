@@ -7,10 +7,16 @@ class TestCLI < Minitest::Test
     FileUtils.mkdir_p(@project_path)
     @original_dir = Dir.pwd
     Dir.chdir(@project_path)
+    @_test_db_paths = [Pylonite::Database.db_path_for(File.realpath(@project_path))]
   end
 
   def teardown
     Dir.chdir(@original_dir)
+    @_test_db_paths.each do |p|
+      FileUtils.rm_f(p)
+      FileUtils.rm_f("#{p}-wal")
+      FileUtils.rm_f("#{p}-shm")
+    end
     FileUtils.rm_rf(@tmpdir)
   end
 
@@ -364,10 +370,14 @@ class TestCLI < Minitest::Test
     # Create a DB under a different project name
     other_project = File.join(@tmpdir, "old_project")
     FileUtils.mkdir_p(other_project)
-    other_db = Pylonite::Database.new(File.realpath(other_project))
+    real_other = File.realpath(other_project)
+    other_db = Pylonite::Database.new(real_other)
     other_db.add_task("Task")
     old_path = other_db.db_path
     other_db.close
+    # The old DB path gets moved to match current Dir.pwd, track both for cleanup
+    @_test_db_paths << old_path
+    @_test_db_paths << Pylonite::Database.db_path_for(real_other)
 
     stdout, _ = run_cli("internal", "appropriate", old_path)
     assert_match(/Database moved/, stdout)
