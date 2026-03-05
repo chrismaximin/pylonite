@@ -142,6 +142,11 @@ module Pylonite
           state[:moving] = true
           state[:move_task_id] = col_tasks[state[:row_index]]["id"]
         end
+      when "c"
+        col_tasks = tasks_by_board[boards[state[:col_index]]] || []
+        if col_tasks[state[:row_index]]
+          prompt_comment(state, col_tasks[state[:row_index]]["id"])
+        end
       when "?"
         state[:show_help] = true
       end
@@ -162,6 +167,8 @@ module Pylonite
       when "m"
         state[:moving] = true
         state[:move_task_id] = state[:detail_task_id]
+      when "c"
+        prompt_comment(state, state[:detail_task_id])
       when "?"
         state[:show_help] = true
       end
@@ -187,6 +194,28 @@ module Pylonite
       state[:db].move_task(state[:move_task_id], board)
       state[:moving] = false
       state[:move_task_id] = nil
+    end
+
+    def self.prompt_comment(state, task_id)
+      _, rows = terminal_size
+      # Show prompt on the last row
+      print "\e[#{rows};1H\e[2K" # move to last row, clear it
+      print "#{BOLD}Comment:#{RESET} "
+      # Restore normal terminal mode for text input
+      print "\e[?25h" # show cursor
+      $stdout.flush
+
+      text = nil
+      if $stdin.respond_to?(:cooked)
+        $stdin.cooked { text = $stdin.gets }
+      else
+        text = $stdin.gets
+      end
+      print "\e[?25l" # hide cursor again
+
+      if text && !(text = text.strip).empty?
+        state[:db].add_comment(task_id, text)
+      end
     end
 
     def self.visible_boards(state)
@@ -293,7 +322,7 @@ module Pylonite
       end
 
       # Status bar
-      bar_text = " q:quit  hjkl:navigate  enter:detail  m:move  a:archived  ?:help"
+      bar_text = " q:quit  hjkl:navigate  enter:detail  m:move  c:comment  a:archived  ?:help"
       archived_status = state[:show_archived] ? " [archived:on]" : ""
       bar_text += archived_status
       buf << "\e[#{rows};1H" # move to last row
@@ -326,7 +355,7 @@ module Pylonite
       remaining.times { buf << "\n" }
 
       # Status bar
-      bar_text = " b:back  q:quit  j/k:scroll  m:move  ?:help"
+      bar_text = " b:back  q:quit  j/k:scroll  m:move  c:comment  ?:help"
       buf << "\e[#{rows};1H"
       buf << "#{REVERSE}#{DIM}#{bar_text.ljust(cols)}#{RESET}"
 
@@ -363,12 +392,14 @@ module Pylonite
         "  j/k, up/down      Move between tasks",
         "  Enter             View task detail",
         "  m                 Move selected task to another board",
+        "  c                 Add comment to selected task",
         "  a                 Toggle archived column",
         "  q, Esc            Quit",
         "",
         "#{BOLD}Detail View#{RESET}",
         "  j/k, up/down      Scroll",
         "  m                 Move task to another board",
+        "  c                 Add comment",
         "  b, Esc            Back to board view",
         "  q                 Quit",
         "",

@@ -388,4 +388,59 @@ class TestTUI < Minitest::Test
     assert_match(/In Progress/, stripped)
     assert_match(/1-5/, stripped)
   end
+
+  # --- Comment functionality ---
+
+  def test_board_c_on_empty_does_nothing
+    state = { view: :board, col_index: 0, row_index: 0, show_archived: false, db: @db, moving: false, move_task_id: nil, show_help: false }
+    # 'c' on empty board should not error
+    Pylonite::TUI.handle_board_input(state, "c")
+    # no crash = pass
+  end
+
+  def test_prompt_comment_adds_comment
+    id = @db.add_task("Task", author: "a")
+    state = { db: @db }
+
+    # Simulate stdin with a comment line
+    original_stdin = $stdin
+    original_stdout = $stdout
+    $stdin = StringIO.new("My TUI comment\n")
+    $stdout = StringIO.new
+    begin
+      Pylonite::TUI.prompt_comment(state, id)
+    ensure
+      $stdin = original_stdin
+      $stdout = original_stdout
+    end
+
+    task = @db.get_task(id)
+    assert_equal 1, task["comments"].length
+    assert_equal "My TUI comment", task["comments"][0]["text"]
+  end
+
+  def test_prompt_comment_skips_empty_input
+    id = @db.add_task("Task", author: "a")
+    state = { db: @db }
+
+    original_stdin = $stdin
+    original_stdout = $stdout
+    $stdin = StringIO.new("   \n")
+    $stdout = StringIO.new
+    begin
+      Pylonite::TUI.prompt_comment(state, id)
+    ensure
+      $stdin = original_stdin
+      $stdout = original_stdout
+    end
+
+    task = @db.get_task(id)
+    assert_empty task["comments"]
+  end
+
+  def test_help_overlay_mentions_comment
+    content = Pylonite::TUI.render_help_overlay(80, 30)
+    stripped = content.gsub(/\e\[[0-9;]*[A-Za-z]/, "")
+    assert_match(/comment/i, stripped)
+  end
 end
