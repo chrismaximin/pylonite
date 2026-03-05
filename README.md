@@ -12,13 +12,13 @@ Each project directory gets its own database stored at `~/.pylonite/dbs/`. The c
 
 ![TUI board view with columns](screenshots/tui-boards.png)
 
-### Task detail with move overlay
-
-![Task detail view with move dialog](screenshots/tui-task-move.png)
-
 ### Task detail
 
 ![Task detail view showing description, blockers, and history](screenshots/tui-task.png)
+
+### Task detail with move overlay
+
+![Task detail view with move dialog](screenshots/tui-task-move.png)
 
 ### Activity log
 
