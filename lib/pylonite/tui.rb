@@ -27,7 +27,8 @@ module Pylonite
         detail_scroll: 0,
         show_help: false,
         moving: false,
-        move_task_id: nil
+        move_task_id: nil,
+        log_scroll: 0
       }
 
       setup_terminal
@@ -75,6 +76,8 @@ module Pylonite
         handle_board_input(state, char)
       when :detail
         handle_detail_input(state, char)
+      when :log
+        handle_log_input(state, char)
       end
     end
 
@@ -147,6 +150,9 @@ module Pylonite
         if col_tasks[state[:row_index]]
           prompt_comment(state, col_tasks[state[:row_index]]["id"])
         end
+      when "L"
+        state[:view] = :log
+        state[:log_scroll] = 0
       when "?"
         state[:show_help] = true
       end
@@ -169,6 +175,23 @@ module Pylonite
         state[:move_task_id] = state[:detail_task_id]
       when "c"
         prompt_comment(state, state[:detail_task_id])
+      when "?"
+        state[:show_help] = true
+      end
+
+      true
+    end
+
+    def self.handle_log_input(state, key)
+      case key
+      when "q"
+        return false
+      when "b", "\e"
+        state[:view] = :board
+      when :up, "k"
+        state[:log_scroll] = [state[:log_scroll] - 1, 0].max
+      when :down, "j"
+        state[:log_scroll] += 1
       when "?"
         state[:show_help] = true
       end
@@ -241,6 +264,8 @@ module Pylonite
         buf << render_board(state, cols, rows)
       when :detail
         buf << render_detail(state, cols, rows)
+      when :log
+        buf << render_log(state, cols, rows)
       end
 
       if state[:show_help]
@@ -322,7 +347,7 @@ module Pylonite
       end
 
       # Status bar
-      bar_text = " q:quit  hjkl:navigate  enter:detail  m:move  c:comment  a:archived  ?:help"
+      bar_text = " q:quit  hjkl:navigate  enter:detail  m:move  c:comment  L:log  a:archived  ?:help"
       archived_status = state[:show_archived] ? " [archived:on]" : ""
       bar_text += archived_status
       buf << "\e[#{rows};1H" # move to last row
@@ -362,6 +387,61 @@ module Pylonite
       buf
     end
 
+    def self.render_log(state, cols, rows)
+      entries = state[:db].activity_log
+      buf = +""
+
+      # Title bar
+      title = " PYLONITE - Activity Log "
+      pad = [(cols - title.length) / 2, 0].max
+      buf << "#{REVERSE}#{BOLD}#{' ' * pad}#{title}#{' ' * (cols - pad - title.length)}#{RESET}\n"
+
+      lines = build_log_lines(entries, cols)
+      available = rows - 3
+
+      scroll = [state[:log_scroll], [lines.length - available, 0].max].min
+      state[:log_scroll] = scroll
+
+      visible = lines[scroll, available] || []
+      visible.each { |line| buf << "#{line}\n" }
+
+      remaining = available - visible.length
+      remaining.times { buf << "\n" }
+
+      bar_text = " b:back  q:quit  j/k:scroll  ?:help"
+      buf << "\e[#{rows};1H"
+      buf << "#{REVERSE}#{DIM}#{bar_text.ljust(cols)}#{RESET}"
+
+      buf
+    end
+
+    def self.build_log_lines(entries, cols)
+      return ["", "  #{DIM}No activity yet.#{RESET}"] if entries.empty?
+
+      lines = []
+      entries.each do |e|
+        lines << "  #{DIM}#{e["created_at"]}#{RESET} #{e["actor"]} #{format_log_action(e["action"])} #{BOLD}##{e["task_id"]}#{RESET} #{truncate(e["title"], cols - 40)}"
+        lines << "    #{DIM}#{e["detail"]}#{RESET}"
+        lines << ""
+      end
+      lines
+    end
+
+    def self.format_log_action(action)
+      case action
+      when "created" then "created"
+      when "moved" then "moved"
+      when "assigned" then "assigned"
+      when "commented" then "commented on"
+      when "updated" then "updated"
+      when "blocker_added" then "added blocker to"
+      when "blocker_removed" then "removed blocker from"
+      when "subtask_added" then "added subtask to"
+      when "subtask_created" then "created subtask"
+      else action.tr("_", " ")
+      end
+    end
+
     def self.render_overlay(lines, cols, rows)
       box_width = lines.map { |l| l.gsub(/\e\[[0-9;]*m/, "").length }.max + 4
       box_width = [box_width, cols - 4].min
@@ -393,6 +473,7 @@ module Pylonite
         "  Enter             View task detail",
         "  m                 Move selected task to another board",
         "  c                 Add comment to selected task",
+        "  L                 Activity log",
         "  a                 Toggle archived column",
         "  q, Esc            Quit",
         "",
@@ -400,6 +481,11 @@ module Pylonite
         "  j/k, up/down      Scroll",
         "  m                 Move task to another board",
         "  c                 Add comment",
+        "  b, Esc            Back to board view",
+        "  q                 Quit",
+        "",
+        "#{BOLD}Log View#{RESET}",
+        "  j/k, up/down      Scroll",
         "  b, Esc            Back to board view",
         "  q                 Quit",
         "",

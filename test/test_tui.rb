@@ -443,4 +443,70 @@ class TestTUI < Minitest::Test
     stripped = content.gsub(/\e\[[0-9;]*[A-Za-z]/, "")
     assert_match(/comment/i, stripped)
   end
+
+  # --- Log view ---
+
+  def test_board_L_switches_to_log
+    state = { view: :board, col_index: 0, row_index: 0, show_archived: false, db: @db, moving: false, move_task_id: nil, show_help: false, log_scroll: 0 }
+    Pylonite::TUI.handle_board_input(state, "L")
+    assert_equal :log, state[:view]
+    assert_equal 0, state[:log_scroll]
+  end
+
+  def test_log_input_back
+    state = { view: :log, log_scroll: 0 }
+    Pylonite::TUI.handle_log_input(state, "b")
+    assert_equal :board, state[:view]
+  end
+
+  def test_log_input_quit
+    state = { view: :log, log_scroll: 0 }
+    result = Pylonite::TUI.handle_log_input(state, "q")
+    assert_equal false, result
+  end
+
+  def test_log_input_scroll
+    state = { view: :log, log_scroll: 0 }
+    Pylonite::TUI.handle_log_input(state, "j")
+    assert_equal 1, state[:log_scroll]
+    Pylonite::TUI.handle_log_input(state, "k")
+    assert_equal 0, state[:log_scroll]
+  end
+
+  def test_log_input_scroll_up_clamped
+    state = { view: :log, log_scroll: 0 }
+    Pylonite::TUI.handle_log_input(state, :up)
+    assert_equal 0, state[:log_scroll]
+  end
+
+  def test_log_input_help
+    state = { view: :log, log_scroll: 0, show_help: false }
+    Pylonite::TUI.handle_log_input(state, "?")
+    assert state[:show_help]
+  end
+
+  def test_build_log_lines_with_entries
+    @db.add_task("Task A", author: "alice")
+    @db.add_task("Task B", author: "bob")
+    @db.move_task(1, "in_progress", actor: "alice")
+    entries = @db.activity_log
+    lines = Pylonite::TUI.build_log_lines(entries, 80)
+    joined = lines.join("\n")
+    assert_match(/Task A/, joined)
+    assert_match(/Task B/, joined)
+    assert_match(/alice/, joined)
+    assert_match(/moved/, joined)
+  end
+
+  def test_build_log_lines_empty
+    lines = Pylonite::TUI.build_log_lines([], 80)
+    joined = lines.join("\n")
+    assert_match(/No activity/, joined)
+  end
+
+  def test_help_overlay_mentions_log
+    content = Pylonite::TUI.render_help_overlay(80, 40)
+    stripped = content.gsub(/\e\[[0-9;]*[A-Za-z]/, "")
+    assert_match(/Log View/, stripped)
+  end
 end
